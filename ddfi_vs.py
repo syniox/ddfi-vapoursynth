@@ -11,6 +11,17 @@ def mvflow(clip,analparams,blkmode,times):
     oput=core.mv.BlockFPS(clip,sup,mvbw,mvfw,mode=blkmode,num=clip.fps_num*times,den=clip.fps_den)
     return oput.std.AssumeFPS(clip)
 
+def svpflow(clip,preset="fast"):
+    #vectorstr='{block:{w:16,overlap:0},main:{search:{type:2,distance:-6,satd:false},distance:0,bad:{sad:2000}}}'
+    superstr='{pel:1,gpu:1}'
+    vectorstr='{block:{w:32,h:32,overlap:0},main:{search:{type:2},bad:{sad:2000}}}'
+    smoothstr='{rate:{num:2,den:1,abs:false},algo:2,gpuid:0}'
+    sup=core.svp1.Super(clip,superstr)
+    vec=core.svp1.Analyse(sup["clip"],sup["data"],clip,vectorstr)
+    oput=core.svp2.SmoothFps(clip,sup["clip"],sup["data"],vec["clip"],vec["data"],smoothstr)
+    oput=core.std.AssumeFPS(oput,fpsnum=oput.fps_num,fpsden=oput.fps_den)
+    return oput
+
 ## Main
 # can't have a fluent playback atm
 # thr:      dedup thereshold(if more than $thr frames are the same, the program will ignore it)
@@ -34,7 +45,9 @@ def ddfi(clip:vs.VideoNode,thr=2,preset="medium",
     if blksize is None: blksize=[32,16,8][pnum]
     analparams={'overlap':overlap,'search':search,'blksize':blksize}
 
-    smooth=mvflow(clip,analparams,blkmode,2)[1::2]
+    #smooth=mvflow(clip,analparams,blkmode,2)[1::2]
+    clip=clip.fmtc.bitdepth(bits=8)
+    smooth=svpflow(clip)[1::2]
     def mod_thr2(n,f): # TODO 开场黑屏
         if n<=1:
             return f[1-n]
