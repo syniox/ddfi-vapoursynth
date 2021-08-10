@@ -4,13 +4,6 @@ import mvsfunc as mvf
 
 ## Helper
 
-def mvflow(clip,analparams,blkmode,times):
-    sup=core.mv.Super(clip)
-    mvbw=core.mv.Analyse(sup,isb=True,**analparams)
-    mvfw=core.mv.Analyse(sup,isb=False,**analparams)
-    oput=core.mv.BlockFPS(clip,sup,mvbw,mvfw,mode=blkmode,num=clip.fps_num*times,den=clip.fps_den)
-    return oput.std.AssumeFPS(clip)
-
 def svpflow(clip,preset="fast"):
     #vectorstr='{block:{w:16,overlap:0},main:{search:{type:2,distance:-6,satd:false},distance:0,bad:{sad:2000}}}'
     superstr='{pel:1,gpu:1}'
@@ -26,27 +19,13 @@ def svpflow(clip,preset="fast"):
 # can't have a fluent playback atm
 # thr:      dedup thereshold(if more than $thr frames are the same, the program will ignore it)
 # preset :  speed(fast(49fps)medium(47fps)slow(40fps)) therefore don't use fast
-def ddfi(clip:vs.VideoNode,thr=2,preset="medium",
-        pel=2,block=True,blkmode=None,blksize=None,search=None,overlap=0):
+def ddfi(clip:vs.VideoNode,thr=2):
     funcname="ddfi"
     if not isinstance(clip, vs.VideoNode):
         raise TypeError(funcname+': This is not a clip!')
     if thr<2 or thr>3:
         raise TypeError(funcname+': thr should be 2\\3.')
-    pnum={
-            'fast':0,
-            'medium':1,
-            'slow':2
-            }.get(preset)
-    if pnum==None:
-        raise TypeError(funcname+': Preset should be fast\\medium\\slow.')
-    if search is None: search=[0,3,3][pnum]
-    if blkmode is None: blkmode=[0,0,3][pnum]
-    if blksize is None: blksize=[32,16,8][pnum]
-    analparams={'overlap':overlap,'search':search,'blksize':blksize}
-
-    #smooth=mvflow(clip,analparams,blkmode,2)[1::2]
-    clip=clip.fmtc.bitdepth(bits=8)
+    clip=clip.resize.Point(format=vs.YUV420P16)
     smooth=svpflow(clip)[1::2]
     def mod_thr2(n,f): # TODO 开场黑屏
         if n<=1:
