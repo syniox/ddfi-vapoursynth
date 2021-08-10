@@ -25,23 +25,19 @@ def frame2clip(frame: vs.VideoFrame, fpsnum=1, fpsden=1, /, *, enforce_cache=Tru
         result = result.std.Cache(size=1, fixed=True)
     return result
 
-def mvdedup(clip,analparams,blkmode,times):
-    if times==None:
-        times=clip.num_frames-1
-    #print("[debug] times: ",times)
-    clip=clip[0]+clip[times]
-    sup=core.mv.Super(clip)
-    mvbw=core.mv.Analyse(sup,isb=True,**analparams)
-    mvfw=core.mv.Analyse(sup,isb=False,**analparams)
-    oput=core.mv.BlockFPS(clip,sup,mvbw,mvfw,mode=blkmode,num=clip.fps_num*times,den=clip.fps_den)
-    return oput.std.AssumeFPS(clip)
-
 def mvflow(clip,analparams,blkmode,times):
     sup=core.mv.Super(clip)
     mvbw=core.mv.Analyse(sup,isb=True,**analparams)
     mvfw=core.mv.Analyse(sup,isb=False,**analparams)
     oput=core.mv.BlockFPS(clip,sup,mvbw,mvfw,mode=blkmode,num=clip.fps_num*times,den=clip.fps_den)
     return oput.std.AssumeFPS(clip)
+
+# pos: 0-index
+def mvinter(c0,c1,analparams,blkmode,times,pos):
+    clip=c0+c1;
+    clip=mvflow(clip,analparams,blkmode,times)
+    return clip.get_frame(pos)
+
 
 def Identical(c1,c2):
     """
@@ -51,12 +47,14 @@ def Identical(c1,c2):
         c2=frame2clip(c2)
     """
     comp=mvf.PlaneCompare(c1,c2,mae=False,rmse=False,psnr=True,cov=False,corr=False)
-    return comp.get_frame(0).props.PlanePSNR>60
+    return comp.get_frame(0).props.PlanePSNR>50
 
 
 ## Main
+# can't have a fluent playback atm
 # thr:      dedup thereshold(if more than $thr frames are the same, the program will ignore it)
-def ddfi(clip:vs.VideoNode,thr=2,preset="fast",
+# preset :  speed(fast(49fps)medium(47fps)slow(40fps)) therefore don't use fast
+def ddfi(clip:vs.VideoNode,thr=2,preset="medium",
         pel=2,block=True,blkmode=None,blksize=None,search=None,overlap=0):
     funcname="ddfi"
     if not isinstance(clip, vs.VideoNode):
@@ -74,23 +72,24 @@ def ddfi(clip:vs.VideoNode,thr=2,preset="fast",
     if blkmode is None: blkmode=[0,0,3][pnum]
     if blksize is None: blksize=[32,16,8][pnum]
     analparams={'overlap':overlap,'search':search,'blksize':blksize}
-    c0=frame2clip(clip.get_frame(0),clip.fps_num,clip.fps_den)
-    oput=c0
-    dup_cnt=0
-    for (i,f1) in enumerate(clip.frames()):
-        print("processing ",i)
-        c1=frame2clip(f1,clip.fps_num,clip.fps_den)
-        if not Identical(c0,c1):
-            if dup_cnt==0:
-                oput+=c1
-            elif dup_cnt<thr: ### TODO: SCDetect
-                oput+=(mvflow(c0+c1,analparams,blkmode,dup_cnt+1))[1::]
-            else:
-                oput+=c0*dup_cnt+c1
-            dup_cnt=0
+
+    def mod_thr2(n,f): # TODO 开场黑屏
+        c0=frame2clip(f[0])
+        c1=frame2clip(f[1])
+        c2=frame2clip(f[2])
+        b01=Identical(c0,c1)
+        b12=Identical(c1,c2)
+        if b01 and not b12:
+            return mvinter(c0,c2,analparams,blkmode,2,1)
         else:
-            dup_cnt+=1;
-        c0=c1
-    if dup_cnt>0:
-        oput+=c0*dup_cnt
-    return oput
+            return f[1]
+
+    if thr==2:
+        blk=core.std.BlankClip(clip,length=1)
+        c0=clip+blk+blk
+        c1=blk+clip+blk
+        c2=blk+blk+clip
+        oput=c0.std.ModifyFrame([c0,c1,c2],mod_thr2)
+        return oput
+    else:
+        raise TypeError(funcname+'unimplemented thr.(2 only)')
