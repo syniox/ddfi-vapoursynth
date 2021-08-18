@@ -26,8 +26,7 @@ def svpflow(clip,preset="fast"):
 
 ## Core
 
-# faster, higher memory consumption, still WIP
-def ddfi_core_eval(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
+def ddfi_core(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
     def mod_thr2(n,f,clip,smooth):
         if f[0].props.PlanePSNR>50 and f[1].props.PlanePSNR<=50:
             return smooth
@@ -38,36 +37,12 @@ def ddfi_core_eval(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
         c0=clip+blk+blk # 同下标时展现c1下一帧
         c1=blk+clip+blk
         c2=blk+blk+clip
+        smooth=blk+blk+smooth
         id01=mvf.PlaneCompare(c0,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
         id21=mvf.PlaneCompare(c2,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
         fn=partial(mod_thr2,clip=c1,smooth=smooth)
-        oput=c1.std.FrameEval(fn,prop_src=[id01,id21])
-        if oput.num_frames>1:
-            return oput.std.Trim(last=oput.num_frames-2)
-        return oput
-    else:
-        raise TypeError(funcname+'unimplemented thr.(2 only)')
-
-def ddfi_core(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
-    def mod_thr2(n,f): # TODO 开场黑屏
-        if n<=1:
-            return f[1-n]
-        if f[1].props.PlanePSNR>50 and f[2].props.PlanePSNR<=50:
-            return f[3]
-        else:
-            return f[1]
-
-    if thr==2:
-        blk=core.std.BlankClip(clip,length=1)
-        c0=clip+blk+blk
-        c1=blk+clip+blk
-        c2=blk+blk+clip
-        id01=mvf.PlaneCompare(c0,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
-        id21=mvf.PlaneCompare(c2,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
-        oput=c1.std.ModifyFrame([c1,id01,id21,smooth],mod_thr2)
-        if oput.num_frames>1:
-            return oput.std.Trim(last=oput.num_frames-2)
-        return oput
+        oput=c2.std.FrameEval(fn,prop_src=[id01,id21])
+        return oput[2::]
     else:
         raise TypeError(funcname+'unimplemented thr.(2 only)')
 
