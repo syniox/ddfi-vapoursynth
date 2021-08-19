@@ -46,6 +46,33 @@ def ddfi_core(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
     else:
         raise TypeError(funcname+'unimplemented thr.(2 only)')
 
+# WIP: use one PlaneCompare (64fps->70fps)
+def ddfi_core_f(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
+    def set_PSNR_100(n,f):
+        fout=f.copy()
+        fout.props['PlanePSNR']=100
+        return fout
+
+    def mod_thr2(n,f,clip,smooth):
+        if f[0].props.PlanePSNR>50 and f[1].props.PlanePSNR<=50:
+            return smooth
+        return clip
+
+    if thr==2:
+        blk=core.std.BlankClip(clip,length=1)
+        t0=clip+blk
+        t1=blk+clip
+        base=mvf.PlaneCompare(t0,t1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
+        smooth=blk+blk+smooth
+        blk=blk.std.ModifyFrame(blk,set_PSNR_100)
+        id01=base+blk
+        id12=blk+base
+        fn=partial(mod_thr2,clip=id12,smooth=smooth)
+        oput=id12.std.FrameEval(fn,prop_src=[id01,id12])
+        return oput[2::]
+    else:
+        raise TypeError(funcname+'unimplemented thr.(2 only)')
+
 ## Wrapper
 
 # thr:      dedup thereshold(if more than $thr frames are the same, the program will ignore it)
