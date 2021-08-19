@@ -8,10 +8,12 @@ mpv:
 from vapoursynth import core
 import ddfi_vs
 
-clip=core.std.AssumeFPS(clip,fpsnum=24000,fpsden=1001)
+clip=core.std.AssumeFPS(video_in,fpsnum=24000,fpsden=1001)
 ddfi_vs.ddfi_svp(clip).set_output()
 ```
+### Known Issues
 
+1. thr not working
 
 ### Credits
 
