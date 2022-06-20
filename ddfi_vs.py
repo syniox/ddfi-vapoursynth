@@ -26,6 +26,7 @@ def svpflow(clip,preset="fast"):
 
 ## Core
 
+# WIP, 163fps
 def ddfi_core(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
     def mod_thr2(n,f,clip,smooth):
         if f[0].props.PlanePSNR>50 and f[1].props.PlanePSNR<=50:
@@ -38,15 +39,41 @@ def ddfi_core(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
         c1=blk+clip+blk
         c2=blk+blk+clip
         smooth=blk+blk+smooth
-        id01=mvf.PlaneCompare(c0,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
+        id10=mvf.PlaneCompare(c0,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
         id21=mvf.PlaneCompare(c2,c1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
-        fn=partial(mod_thr2,clip=c1,smooth=smooth)
-        oput=c2.std.FrameEval(fn,prop_src=[id01,id21])
+        fn=partial(mod_thr2,clip=c2,smooth=smooth)
+        oput=c2.std.FrameEval(fn,prop_src=[id21,id10])
         return oput[2::]
     else:
         raise TypeError(funcname+'unimplemented thr.(2 only)')
 
-# WIP: use one PlaneCompare (64fps->70fps)
+# RC, 177fps
+def ddfi_core_m(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
+    # TODO try to find a good value
+    isstatic=lambda f: bool(f.props.DiffAverage<2e-3) 
+    def set_static(n,f):
+        fout=f.copy()
+        fout.props['DiffAverage']=0
+        return fout
+    def mod_thr2(n,f,clip,smooth):
+        if isstatic(f[0]) and not isstatic(f[1]):
+            return smooth
+        return clip
+
+    if thr==2:
+        mmask=core.motionmask.MotionMask(clip,th1=20)
+        mmask=mmask.std.PlaneStats(plane=0,prop='Diff')
+        blk=core.std.BlankClip(clip,length=1)
+        blk=blk.std.ModifyFrame(blk,set_static)
+        m0=mmask         # 前向diff
+        m1=mmask[1:]+blk # 后向diff
+        fn=partial(mod_thr2,clip=clip,smooth=smooth)
+        oput=clip.std.FrameEval(fn,prop_src=[m0,m1])
+        return oput
+    else:
+        raise TypeError(funcname+'unimplemented thr.(2 only)')
+
+# WIP, 186fps
 def ddfi_core_f(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
     def set_PSNR_100(n,f):
         fout=f.copy()
@@ -62,16 +89,17 @@ def ddfi_core_f(clip:vs.VideoNode,smooth:vs.VideoNode,thr=2):
         blk=core.std.BlankClip(clip,length=1)
         t0=clip+blk
         t1=blk+clip
-        base=mvf.PlaneCompare(t0,t1,mae=False,rmse=False,psnr=True,cov=False,corr=False)
+        base=mvf.PlaneCompare(t1,t0,mae=False,rmse=False,psnr=True,cov=False,corr=False)
         smooth=blk+blk+smooth
         blk=blk.std.ModifyFrame(blk,set_PSNR_100)
-        id01=base+blk
-        id12=blk+base
-        fn=partial(mod_thr2,clip=id12,smooth=smooth)
-        oput=id12.std.FrameEval(fn,prop_src=[id01,id12])
+        id10=base+blk
+        id21=blk+base
+        fn=partial(mod_thr2,clip=id21,smooth=smooth)
+        oput=id21.std.FrameEval(fn,prop_src=[id21,id10])
         return oput[2::]
     else:
         raise TypeError(funcname+'unimplemented thr.(2 only)')
+
 
 ## Wrapper
 
